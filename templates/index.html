@@ -1,0 +1,188 @@
+<!DOCTYPE HTML>
+<html>
+	<head>
+		<title>Django Simple Filesystem Browser (SPA)</title>
+		<script
+			  src="https://code.jquery.com/jquery-3.1.1.min.js"
+			  integrity="sha256-hVVnYaiADRTO2PzUGmuLJr8BLUSjGIZsDYGmIJLv2b8="
+			  crossorigin="anonymous"></script>
+
+		<script 
+			src="https://cdnjs.cloudflare.com/ajax/libs/js-cookie/2.1.3/js.cookie.min.js" 
+			integrity="sha256-S20kSlaai+/AuQHj3KjoLxmxiOLT5298YvzpaTXtYxE=" 
+			crossorigin="anonymous"></script>
+
+		<style type="text/css">
+			body { background-color:#cccaf7; 
+				filter: none; }
+			#state { border-radius:0 0 1em 1em;
+				padding: 1em;  }
+			#tree  { border-radius:2em; 
+				border: 2px solid grey;
+				padding: 2em;
+				margin: 1em;
+				background-color: #ababad ;
+				font-size: x-large; }
+			#pwd   { display: block;
+				margin:0;
+				border-radius:1em 1em 0 0;
+				padding: 1em;
+				font-weight:bold; }
+			
+			.thinking { 
+				background-color: #fcb04e;
+			}
+			.thinkingdone { 
+				color: black;
+				background-color: white;
+			}
+			.stateok {
+				background-color: green;
+			}
+			.statebad {
+				background-color: red;
+			}
+			
+		</style>
+	</head>
+
+	<body>
+
+		<h1 id="pwd" class="thinkingdone">Simple Filesystem Browser</h1>
+		<div id="state" class="stateok">Click 'BROWSE' to begin</div>
+		<div id="tree" class="renderingdone">
+			<ul id="dirs">
+				<li><a href="#" onclick="ls('')">BROWSE</a></li>
+				<li><a href="#" onclick="ls('/etc/passwd')">BROWSE a file</a></li>
+				<li><a href="#" onclick="ls('/ericidle')">BROWSE a nonexistant directory</a></li>
+				<li><a href="#" onclick="ls('blahblah')">BROWSE a random string</a></li>
+			</ul>
+			<ul id="files">
+				
+			</ul>
+		</div>
+
+		<script type="text/javascript">
+
+			/* Deal with CSRF 
+				- http://docs.djangoproject.com/en/dev/ref/csrf/#ajax */
+			var csrftoken = Cookies.get('csrftoken');
+
+			function csrfSafeMethod(method) {
+			    // these HTTP methods do not require CSRF protection
+			    return (/^(GET|HEAD|OPTIONS|TRACE)$/.test(method));
+			}
+			$.ajaxSetup({
+			    beforeSend: function(xhr, settings) {
+				if (!csrfSafeMethod(settings.type) && !this.crossDomain) {
+				    xhr.setRequestHeader("X-CSRFToken", csrftoken);
+				}
+			    }
+			});
+			
+			function ls(path)
+			{
+				
+				animate_thinking();
+
+				var req = $.get({
+					url: "/dsfb/ls/",
+					type: "post",
+					data: { path: path },
+				})
+				.done( function(data) {
+
+					render_state_ok();
+					render(data);
+				})
+				.fail( function(data) {
+					
+					render_state_error(data);
+				})
+				.always( function(data) {
+					
+					/* debug */		
+					var str = JSON.stringify(data,null,4);
+					console.log(str);
+
+					animate_thinking();
+				});
+
+			};
+
+
+
+			function render(data)
+			{
+
+				animate_rendering();
+				render_tree(data);
+				animate_rendering();
+
+			}
+
+			function render_state_ok()
+			{
+				$('#state').text('OK')
+					.removeClass('statebad')
+					.addClass('stateok');
+				
+			}
+
+			function render_state_error(data)
+			{
+				var errmsg = ''
+				if (data) {
+					errmsg = data.responseJSON.msg
+				}	
+				$('#state').text(errmsg)
+					.removeClass('stateok')
+					.addClass('statebad');
+			}
+
+			function onclick_factory(dpath) {
+				/* returns an onclick handler function
+				for the given dpath */
+				return function() {
+					console.log('CLICK ' + dpath);
+					ls(dpath);
+				}
+			}
+
+			function render_tree(data)
+			{
+
+				$('#pwd').text(data.pwd);
+
+				$('#dirs').empty();
+				for (d of data.dirs) {
+					$('#dirs').append(
+						$('<li>').append(
+							$('<a>').attr('href','#')
+								.click( 
+								onclick_factory(d.dpath))
+								.append(d.dname)));
+				}
+				$('#files').empty();
+				for (f of data.files) {
+					$('#files').append(
+						$('<li>').append(f));
+				}
+			};
+
+			function animate_rendering() 
+			{
+				$('#tree').toggleClass('rendering').toggleClass('renderingdone');
+			};
+
+
+			function animate_thinking() 
+			{
+				$('#pwd').toggleClass('thinking').toggleClass('thinkingdone');
+			}
+
+
+	</script>
+
+	</body>
+</html>
